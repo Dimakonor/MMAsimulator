@@ -1,0 +1,23 @@
+{
+  "name": "server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=../.env src/index.ts",
+    "start": "tsx src/index.ts",
+    "migrate": "tsx --env-file-if-exists=../.env src/migrate.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@mma/shared": "*",
+    "grammy": "^1.31.0",
+    "hono": "^4.6.10",
+    "postgres": "^3.4.5",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0"
+  }
+}
