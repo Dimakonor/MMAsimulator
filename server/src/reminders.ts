@@ -1,5 +1,5 @@
 import { InlineKeyboard, GrammyError, type Bot } from 'grammy';
-import { advance, HOUR, msUntilSatiety, type FighterState } from '@mma/shared';
+import { BALANCE as B, advance, HOUR, msUntilSatiety, type FighterState } from '@mma/shared';
 import { sql, track } from './db.js';
 import { env } from './env.js';
 
@@ -30,7 +30,9 @@ export function computeNextReminder(
   const frozenTill = s.frozenUntil ?? now;
   const hungryAt = Math.max(frozenTill, now + msUntilSatiety(s, HUNGRY_LEVEL));
   const fightAt = s.nextFightAt;
-  let at = Math.min(hungryAt, fightAt);
+  // окно весогонки (со второго боя): напомнить через 2 ч после открытия
+  const weighAt = s.fightsCount >= 1 && !(s.weight?.made) ? s.nextFightAt - B.weightCut.window + 2 * HOUR : Infinity;
+  let at = Math.min(hungryAt, fightAt, weighAt > now ? weighAt : Infinity);
   if (lastNotifiedAt) at = Math.max(at, lastNotifiedAt + MIN_GAP);
   at = Math.max(at, now + 30 * 60_000);
   return outOfQuietHours(at, tzOffsetMin);
@@ -48,8 +50,14 @@ export async function scheduleReminder(userId: number) {
 
 // Сообщения — голосом бойца, а не системы. Это и есть «привязанность».
 function messageFor(name: string, s: FighterState, now: number): { text: string; kind: string } {
-  if (now >= s.nextFightAt && s.rank < 8) {
-    return { kind: 'fight_ready', text: `🥊 Тренер, бой назначен. Я готов. Открывай, выходим в клетку.\n— ${name}` };
+  if (s.activeFight) {
+    return { kind: 'fight_paused', text: `Тренер, я в клетке! Угол пустой — ты где?\n— ${name}` };
+  }
+  if (now >= s.nextFightAt) {
+    return { kind: 'fight_ready', text: `🥊 Тренер, бой назначен. Я готов. Выходим в клетку.\n— ${name}` };
+  }
+  if (s.weight && !s.weight.made && s.weight.forFight === s.fightsCount) {
+    return { kind: 'weigh_in', text: `⚖️ Завтра взвешивание, а я на ${s.weight.over} кг тяжелее. Гони меня в сауну, тренер.\n— ${name}` };
   }
   if (s.satiety < 15) {
     return { kind: 'starving', text: `Тренер… я ел последний раз вчера. Форма уходит.\n— ${name}` };
@@ -72,7 +80,8 @@ export function startReminderWorker(bot: Bot) {
       const s = advance(u.state, now);
       const { text, kind } = messageFor(u.name, s, now);
       const kb = new InlineKeyboard();
-      if (kind !== 'fight_ready') kb.text('🍗 Покормить', 'act:feed');
+      if (kind === 'hungry' || kind === 'starving') kb.text('🍗 Покормить', 'act:feed');
+      if (kind === 'weigh_in') kb.text('🧖 В сауну', 'act:cut');
       if (env.WEBAPP_URL) kb.webApp('Открыть', env.WEBAPP_URL);
       try {
         await bot.api.sendMessage(userId, text, { reply_markup: kb });

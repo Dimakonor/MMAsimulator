@@ -2,15 +2,21 @@
   "name": "mmasimulator",
   "private": true,
   "type": "module",
-  "workspaces": ["shared", "server", "web"],
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev:server": "npm run dev -w server",
-    "dev:web": "npm run dev -w web",
-    "build": "npm run build -w web",
+    "dev:web": "npm run art && npm run dev -w web",
+    "build": "npm run art && npm run build -w web",
     "start": "npm run start -w server",
     "migrate": "npm run migrate -w server",
     "test": "npm run test -w shared",
-    "typecheck": "npm run typecheck --workspaces"
+    "typecheck": "npm run typecheck --workspaces",
+    "art": "node tools/unpack-art.mjs",
+    "preview": "node tools/build-preview.mjs > preview.html"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

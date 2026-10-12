@@ -1,38 +1,40 @@
 # MMA Simulator — Telegram Mini App
 
-Растишь одного бойца: кормишь, тренируешь, укладываешь спать. Каждые 3 дня — бой с лестницей соперников. Цель — пояс примерно за 30 дней. Бот напоминает голосом бойца, кормить можно прямо из чата.
+Растишь одного бойца с улицы до пояса. Кормишь, тренируешь ударку, борьбу и кардио, гоняешь вес перед взвешиванием. Каждые 3 дня выходишь в клетку: гейм-план, совет из угла между раундами, нокауты, сабмишны, судейские записки. Пояс примерно за 30 дней.
+
+Три темы на выбор, у каждой свой стиль: **Подвал** (пиксель-арт), **Горный лагерь** (комикс), **Неоновая арена** (постер турнира).
 
 ## Документы
-- [`docs/01-concept-review.md`](docs/01-concept-review.md) — жёсткий разбор концепции: дыры, улучшения, монетизация, ролики
-- [`docs/02-mvp-14-days.md`](docs/02-mvp-14-days.md) — что включить, что не делать, план по дням
-- [`docs/03-metrics-and-gates.md`](docs/03-metrics-and-gates.md) — метрики, пороги, точки решения, SQL
-- [`docs/04-tech-notes.md`](docs/04-tech-notes.md) — стек и подводные камни (Stars, бот, iOS/Android)
+- [`docs/01-concept-review.md`](docs/01-concept-review.md) — жёсткий разбор концепции
+- [`docs/02-mvp-14-days.md`](docs/02-mvp-14-days.md) — скоуп MVP и план по дням
+- [`docs/03-metrics-and-gates.md`](docs/03-metrics-and-gates.md) — метрики, пороги, SQL
+- [`docs/04-tech-notes.md`](docs/04-tech-notes.md) — стек и подводные камни
+- [`docs/05-game-design.md`](docs/05-game-design.md) — механика, соперники, бой, баланс, темы
 
 ## Структура
 ```
-shared/   чистая игровая логика: шкалы, действия, бой, баланс (config.ts) + тесты
-server/   Hono API + бот grammY + оплата Stars + воркер напоминаний (один процесс)
-web/      React + Vite Mini App
+shared/      чистая игровая логика: уход, навыки, весогонка, пошаговый бой, соперники + тесты баланса
+server/      Hono API + бот grammY + оплата Stars + напоминания (один процесс)
+web/         Preact + htm Mini App (без JSX и плагинов), демо-режим вне Telegram
+web/art-src/ арт в base64 (39 картинок, 3 темы) — распаковывается `npm run art`
+tools/       unpack-art.mjs, build-preview.mjs (автономное превью без npm)
 ```
 
-## Запуск локально
+## Запуск
 ```bash
 cp .env.example .env          # BOT_TOKEN, DATABASE_URL
 npm install
 npm run migrate
 npm run dev:server            # API :3000, бот в long polling
-npm run dev:web               # Vite :5173, /api проксируется на :3000
-cloudflared tunnel --url http://localhost:5173   # https-URL -> @BotFather -> Mini App URL, и в WEBAPP_URL
-npm test                      # тесты логики и баланса
+npm run dev:web               # распакует арт, Vite :5173, /api → :3000
+npm test                      # логика + симуляция баланса
 ```
+Открытая в обычном браузере игра работает в **демо-режиме**: вся логика локально, внизу машина времени (+3ч, +1д, «к бою»). В Telegram — настоящий сервер.
+
+Превью одним файлом без npm: `npm run preview` (нужен Node 22.7+), получится `preview.html`.
 
 ## Деплой (один сервис)
 1. Postgres: Neon или Supabase → `DATABASE_URL`.
 2. Railway или Fly: build `npm install && npm run build`, start `npm run migrate && npm start`.
-3. Переменные: `BOT_TOKEN`, `DATABASE_URL`, `PUBLIC_URL=https://<домен>`, `WEBAPP_URL=https://<домен>`, `WEBHOOK_SECRET`.
-4. В @BotFather: Bot Settings → Configure Mini App → URL = `WEBAPP_URL`.
-
-С заданным `PUBLIC_URL` сервер сам ставит вебхук на `/tg/webhook`. Без него бот работает через long polling.
-
-## Баланс
-Все числа лежат в `shared/src/config.ts`. Тест `shared/test/game.test.ts` симулирует игрока, поэтому после правок запускай `npm test`. Текущий баланс: 3 захода в день — чемпион примерно за 31 день, 2 захода — примерно за 43.
+3. Переменные: `BOT_TOKEN`, `DATABASE_URL`, `PUBLIC_URL`, `WEBAPP_URL`, `WEBHOOK_SECRET`.
+4. @BotFather → Bot Settings → Configure Mini App → URL = `WEBAPP_URL`.

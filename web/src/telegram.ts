@@ -1,5 +1,5 @@
-// Тонкая обёртка над window.Telegram.WebApp с безопасными фолбэками
-// (вне Telegram, в браузере для разработки).
+// Тонкая обёртка над window.Telegram.WebApp с безопасными фолбэками.
+// Вне Telegram (браузер, превью) tg === undefined и игра работает в демо-режиме.
 
 type Haptic = 'light' | 'medium' | 'heavy' | 'rigid' | 'soft';
 
@@ -13,6 +13,7 @@ interface TgWebApp {
   disableVerticalSwipes?(): void;
   requestWriteAccess?(cb: (granted: boolean) => void): void;
   openInvoice?(url: string, cb: (status: 'paid' | 'cancelled' | 'failed' | 'pending') => void): void;
+  openTelegramLink?(url: string): void;
   HapticFeedback?: {
     impactOccurred(s: Haptic): void;
     notificationOccurred(t: 'error' | 'success' | 'warning'): void;
@@ -35,19 +36,22 @@ export function initTelegram() {
   tg.expand();
   // iOS: иначе свайп вниз сворачивает приложение посреди тапов (Bot API 7.7+)
   if (tg.isVersionAtLeast('7.7')) tg.disableVerticalSwipes?.();
-  if (tg.isVersionAtLeast('6.1')) {
-    tg.setHeaderColor?.('#0d0d0f');
-    tg.setBackgroundColor?.('#0d0d0f');
+}
+
+export function setChrome(color: string) {
+  if (tg?.isVersionAtLeast('6.1')) {
+    tg.setHeaderColor?.(color);
+    tg.setBackgroundColor?.(color);
   }
 }
 
 export const haptic = {
   tap: () => tg?.HapticFeedback?.impactOccurred('light'),
+  hit: () => tg?.HapticFeedback?.impactOccurred('heavy'),
   ok: () => tg?.HapticFeedback?.notificationOccurred('success'),
   err: () => tg?.HapticFeedback?.notificationOccurred('error'),
 };
 
-/** Разрешение боту писать в личку. Нужно, если игра открыта по прямой ссылке без /start. */
 export function requestWriteAccess(): Promise<boolean> {
   return new Promise((resolve) => {
     if (!tg?.requestWriteAccess || !tg.isVersionAtLeast('6.9')) return resolve(false);
@@ -60,4 +64,11 @@ export function openInvoice(link: string): Promise<string> {
     if (!tg?.openInvoice) return resolve('failed');
     tg.openInvoice(link, (status) => resolve(status));
   });
+}
+
+/** Шер результата в любой чат. */
+export function share(text: string, url = 'https://t.me/') {
+  const link = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  if (tg?.openTelegramLink) tg.openTelegramLink(link);
+  else window.open(link, '_blank', 'noopener');
 }

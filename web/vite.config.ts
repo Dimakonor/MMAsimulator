@@ -1,8 +1,7 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  plugins: [react()],
+  // Preact + htm: JSX не нужен, плагины не нужны
   server: {
     // для теста в Telegram пробрасывай порт через cloudflared/ngrok (нужен https)
     proxy: { '/api': 'http://localhost:3000' },

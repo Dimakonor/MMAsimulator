@@ -20,9 +20,10 @@ bot.command('start', async (ctx) => {
 });
 
 // Действие прямо из уведомления, без открытия Mini App: самый короткий путь возврата.
-bot.callbackQuery(/^act:(feed)$/, async (ctx) => {
-  const r = await doAction(ctx.from.id, 'feed', 'bot');
-  await ctx.answerCallbackQuery({ text: r.ok ? 'Наелся! Спасибо, тренер.' : r.error });
+bot.callbackQuery(/^act:(feed|cut)$/, async (ctx) => {
+  const action = ctx.match[1] as 'feed' | 'cut';
+  const r = await doAction(ctx.from.id, action, 'bot');
+  await ctx.answerCallbackQuery({ text: r.ok ? r.message : r.error });
   if (r.ok) await ctx.editMessageReplyMarkup().catch(() => {});
 });
 

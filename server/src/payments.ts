@@ -1,9 +1,14 @@
 import type { Bot } from 'grammy';
-import { PRODUCTS, type FighterState, type ProductId } from '@mma/shared';
+import { PRODUCTS, THEME_IDS, type FighterState, type ProductId, type ThemeId } from '@mma/shared';
 import { sql, track } from './db.js';
 
 export function isProduct(p: string): p is ProductId {
   return p in PRODUCTS;
+}
+
+function themeOf(p: ProductId): ThemeId | null {
+  const t = p.startsWith('theme_') ? (p.slice(6) as ThemeId) : null;
+  return t && THEME_IDS.includes(t) ? t : null;
 }
 
 /** Ссылка для Telegram.WebApp.openInvoice(). Валюта XTR = Stars, provider_token пустой. */
@@ -32,11 +37,14 @@ export function registerPaymentHandlers(bot: Bot) {
     if (!pl || pl.u !== q.from.id || q.currency !== 'XTR' || q.total_amount !== PRODUCTS[pl.p].stars) {
       return ctx.answerPreCheckoutQuery(false, { error_message: 'Заказ устарел, открой магазин ещё раз.' });
     }
-    if (pl.p === 'starter_pack') {
-      const [f] = await sql<{ state: FighterState }[]>`select state from fighters where user_id = ${pl.u}`;
-      if (!f || f.state.starterPackBought) {
-        return ctx.answerPreCheckoutQuery(false, { error_message: 'Стартовый пак уже куплен.' });
-      }
+    const [f] = await sql<{ state: FighterState }[]>`select state from fighters where user_id = ${pl.u}`;
+    if (!f) return ctx.answerPreCheckoutQuery(false, { error_message: 'Сначала создай бойца.' });
+    if (pl.p === 'starter_pack' && f.state.starterPackBought) {
+      return ctx.answerPreCheckoutQuery(false, { error_message: 'Стартовый пак уже куплен.' });
+    }
+    const theme = themeOf(pl.p);
+    if (theme && f.state.unlockedThemes.includes(theme)) {
+      return ctx.answerPreCheckoutQuery(false, { error_message: 'Эта тема уже открыта.' });
     }
     return ctx.answerPreCheckoutQuery(true);
   });
@@ -59,6 +67,11 @@ export function registerPaymentHandlers(bot: Bot) {
         s.freezes += 2;
         s.starterPackBought = true;
         if (!s.cosmetics.includes('gold_shorts')) s.cosmetics.push('gold_shorts');
+      }
+      const theme = themeOf(pl.p);
+      if (theme && !s.unlockedThemes.includes(theme)) {
+        s.unlockedThemes = [...s.unlockedThemes, theme];
+        s.theme = theme; // сразу включаем купленное
       }
       await tx`update fighters set state = ${tx.json(s as never)}, updated_at = now() where id = ${f.id}`;
       return true;

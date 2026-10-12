@@ -1,5 +1,5 @@
-// Все балансные числа — в одном месте. Это плейсхолдеры для первого теста,
-// крутить их по данным, а не по ощущениям.
+// Все балансные числа — в одном месте. Крутить по данным, а не по ощущениям.
+// После правок: npm test (симуляция игрока проверяет путь до пояса).
 
 export const MIN = 60_000;
 export const HOUR = 60 * MIN;
@@ -17,8 +17,7 @@ export const BALANCE = {
   hungryThreshold: 25,
   exhaustedThreshold: 15,
   formDecayPerHourNeglected: 1.5,
-  // «Потолок потерь»: забросил на неделю — форма не ниже этого значения.
-  // Наказание есть, но возвращаться не страшно.
+  // Нижняя граница потерь: забросил на неделю — форма не ниже. Возвращаться не страшно.
   formFloor: 30,
 
   feed: { satiety: 40, cooldown: 3 * HOUR },
@@ -31,34 +30,45 @@ export const BALANCE = {
     baseSkillGain: 1.5,
     cooldown: 4 * HOUR,
   },
+  startSkills: { striking: 2, grappling: 2, cardio: 2 },
 
-  // Бои — главный смысл ухода за бойцом
+  // Бои
   firstFightDelay: 24 * HOUR,
   fightInterval: 72 * HOUR,
+  rounds: 3,
 
-  // «Больничный» (аналог streak freeze): статы не падают
+  // Весогонка: окно открывается за 24 ч до боя
+  weightCut: {
+    window: 24 * HOUR,
+    startOver: 3, // кг сверх лимита
+    perCut: 1.5,
+    feedGain: 0.5, // поел в окне — плюс к весу
+    energyCost: 8,
+    cooldown: 3 * HOUR,
+    madeBonus: 4, // очков рейтинга в бою
+    missPenalty: 8,
+  },
+
+  // «Больничный»: статы не падают
   freezeDuration: 24 * HOUR,
 
-  // Ленивая симуляция: шаг и максимум
+  // Ленивая симуляция
   simStep: 15 * MIN,
   simMaxSpan: 14 * DAY,
 } as const;
 
-// Лестница соперников. Баланс (симуляция в shared/test): 3 захода в день -> чемпион
-// примерно за 30 дней, 2 захода -> примерно за 40. Это совпадает с нарративом роликов.
-// Имена — пародийные, без реальных бойцов (права на имя/образ).
-export const LADDER = [
-  { name: 'Гена «Табуретка» Сидоров', power: 35 },
-  { name: 'Тимур «Шаурма» Алиев', power: 46 },
-  { name: 'Стас «Бетономешалка» Кравец', power: 58 },
-  { name: 'Арсен «Тихий» Гаспарян', power: 70 },
-  { name: 'Олег «Сосед снизу» Пахомов', power: 82 },
-  { name: 'Рустам «Экскаватор» Байматов', power: 94 },
-  { name: 'Дэн «Без тормозов» Ветров', power: 106 },
-  { name: 'Чемпион: Магомед «Гора» Ахмедов', power: 120 },
-] as const;
+// ---------- Темы ----------
+export type ThemeId = 'basement' | 'mountain' | 'arena';
 
-export type ProductId = 'freeze' | 'starter_pack';
+export const THEMES: Record<ThemeId, { title: string; tagline: string; art: 'pix' | 'com' | 'pos'; stars: number }> = {
+  basement: { title: 'Подвал', tagline: 'Бетон, одна лампочка и мечта', art: 'pix', stars: 75 },
+  mountain: { title: 'Горный лагерь', tagline: 'Снег, покрышка и коза', art: 'com', stars: 75 },
+  arena: { title: 'Неоновая арена', tagline: 'Прожекторы, экраны и пояс', art: 'pos', stars: 75 },
+};
+export const THEME_IDS = Object.keys(THEMES) as ThemeId[];
+
+// ---------- Магазин ----------
+export type ProductId = 'freeze' | 'starter_pack' | `theme_${ThemeId}`;
 
 export const PRODUCTS: Record<ProductId, { title: string; description: string; stars: number }> = {
   freeze: {
@@ -71,4 +81,7 @@ export const PRODUCTS: Record<ProductId, { title: string; description: string; s
     description: '2 больничных + золотые шорты. Одна покупка на аккаунт.',
     stars: 99,
   },
+  theme_basement: { title: 'Тема «Подвал»', description: 'Пиксельный подвал навсегда.', stars: THEMES.basement.stars },
+  theme_mountain: { title: 'Тема «Горный лагерь»', description: 'Комикс-сборы в горах навсегда.', stars: THEMES.mountain.stars },
+  theme_arena: { title: 'Тема «Неоновая арена»', description: 'Арена под прожекторами навсегда.', stars: THEMES.arena.stars },
 };

@@ -4,7 +4,7 @@
 
 | Слой | Выбор | Почему |
 |---|---|---|
-| Фронт | React + Vite + официальный `telegram-web-app.js` | минимум магии, SDK-обёртки отстают от версий Bot API |
+| Фронт | Preact + htm + Vite + официальный `telegram-web-app.js` | API как у React, ~5 КБ вместо ~45, без JSX и плагинов; работает даже без сборщика (см. tools/build-preview.mjs) |
 | Бэкенд | Node + Hono + grammY, **один процесс** (API + вебхук бота + статика + воркер напоминаний) | один деплой, одни логи, ноль межсервисной возни |
 | БД | Postgres (Neon или Supabase, бесплатный тариф) через `postgres` | jsonb для состояния, транзакции `for update` против гонок |
 | Логика | `shared/` — чистые функции без I/O, общие для клиента и сервера | тестируется без базы, баланс правится в одном файле |
@@ -37,6 +37,9 @@
 - iOS: свайп вниз сворачивает Mini App, его отключает `disableVerticalSwipes()` (7.7+). Safe area: `env(safe-area-inset-*)`, а в fullscreen — `contentSafeAreaInset`.
 - Android: старые WebView. Не использовать свежий CSS без фолбэков, проверять на дешёвом устройстве.
 - Desktop: нет хаптиков, другой размер окна. Вёрстка в одну колонку с `max-width`.
+- `structuredClone` нет в старых Android WebView — состояние клонируется через JSON.
+- `localStorage` может быть недоступен (песочница) — обёртка `web/src/storage.ts` падает в память.
+- Шрифты тем грузятся с Google Fonts; при плохой сети первые секунды будет системный шрифт (`display=swap`).
 - Перед вызовом новых методов проверять `isVersionAtLeast` (так сделано в `web/src/telegram.ts`).
 - Для теста в Telegram нужен https: `cloudflared tunnel --url http://localhost:5173`, этот URL указывается в @BotFather как адрес Mini App.
 

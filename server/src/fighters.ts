@@ -1,11 +1,15 @@
 import {
-  applyAction,
+  THEME_IDS,
   advance,
-  canFight,
+  applyAction,
+  continueFight,
   newFighter,
-  runFight,
+  startFight,
   type ActionType,
   type FighterState,
+  type FightStep,
+  type Tactic,
+  type ThemeId,
 } from '@mma/shared';
 import { sql, track } from './db.js';
 import { scheduleReminder } from './reminders.js';
@@ -32,54 +36,71 @@ async function save(tx: Tx, f: FighterRow, state: FighterState) {
   await tx`update fighters set state = ${tx.json(state as never)}, updated_at = now() where id = ${f.id}`;
 }
 
-export async function createFighter(userId: number, name: string, look: number) {
+export async function createFighter(userId: number, name: string, look: number, theme: ThemeId) {
   const clean = name.trim().replace(/\s+/g, ' ').slice(0, 24);
   if (clean.length < 2) throw new Error('Имя слишком короткое');
-  const state = newFighter(Date.now());
+  if (!THEME_IDS.includes(theme)) throw new Error('Нет такой темы');
+  const state = newFighter(Date.now(), theme);
   await sql`insert into fighters (user_id, name, look, state) values (${userId}, ${clean}, ${look % 3}, ${sql.json(state as never)})
             on conflict (user_id) do nothing`;
-  await track(userId, 'fighter_created', { look });
+  await track(userId, 'fighter_created', { look, theme });
   await scheduleReminder(userId);
 }
 
-/** Текущее состояние (досчитанное до now) без записи в БД. */
 export async function viewFighter(userId: number) {
   const f = await getFighter(userId);
   if (!f) return null;
   return { ...f, state: advance(f.state, Date.now()) };
 }
 
-export async function doAction(userId: number, action: ActionType, via: 'app' | 'bot') {
-  const res = await sql.begin(async (tx) => {
-    const f = await getFighter(userId, tx as unknown as Tx, true);
-    if (!f) return { ok: false as const, error: 'Нет бойца' };
-    const r = applyAction(f.state, action, Date.now());
-    if (r.ok) await save(tx as unknown as Tx, f, r.state);
-    return r.ok ? { ok: true as const, message: r.message, state: r.state } : { ok: false as const, error: r.error };
+/** Общая обёртка: блокировка строки, пересчёт, сохранение. */
+async function mutate<T>(userId: number, fn: (f: FighterRow, now: number) => { state?: FighterState; result: T }) {
+  return sql.begin(async (tx) => {
+    const t = tx as unknown as Tx;
+    const f = await getFighter(userId, t, true);
+    if (!f) return { result: null as T | null, fighter: null };
+    const { state, result } = fn(f, Date.now());
+    if (state) await save(t, f, state);
+    return { result, fighter: f };
   });
-  if (res.ok) {
+}
+
+export async function doAction(userId: number, action: ActionType, via: 'app' | 'bot') {
+  const { result } = await mutate(userId, (f, now) => {
+    const r = applyAction(f.state, action, now);
+    return r.ok ? { state: r.state, result: { ok: true as const, message: r.message } } : { result: { ok: false as const, error: r.error } };
+  });
+  if (!result) return { ok: false as const, error: 'Нет бойца' };
+  if (result.ok) {
     await track(userId, 'action', { action, via });
     await scheduleReminder(userId);
   }
-  return res;
+  return result;
 }
 
-export async function doFight(userId: number) {
-  const res = await sql.begin(async (tx) => {
-    const t = tx as unknown as Tx;
-    const f = await getFighter(userId, t, true);
-    if (!f) return { ok: false as const, error: 'Нет бойца' };
-    const now = Date.now();
-    const check = canFight(advance(f.state, now), now);
-    if (!check.ok) return { ok: false as const, error: check.reason! };
-    const { state, result } = runFight(f.state, f.name, f.id, now);
-    await save(t, f, state);
-    await t`insert into fights (fighter_id, won, result) values (${f.id}, ${result.won}, ${t.json(result as never)})`;
-    return { ok: true as const, state, result };
+export async function doFightStep(userId: number, tactic: Tactic, kind: 'start' | 'next') {
+  const { result, fighter } = await mutate(userId, (f, now) => {
+    const r = kind === 'start' ? startFight(f.state, f.name, f.id, tactic, now) : continueFight(f.state, f.name, tactic, now);
+    if ('error' in r) return { result: { error: r.error } as { error: string } | FightStep };
+    return { state: r.state, result: r as { error: string } | FightStep };
   });
-  if (res.ok) {
-    await track(userId, 'fight', { won: res.result.won, rank: res.state.rank });
+  if (!result || !fighter) return { error: 'Нет бойца' };
+  if ('error' in result) return result;
+  if (result.outcome) {
+    const o = result.outcome;
+    await sql`insert into fights (fighter_id, won, result) values (${fighter.id}, ${o.won}, ${sql.json(o as never)})`;
+    await track(userId, 'fight', { won: o.won, method: o.method, rank: result.state.rank, weightMade: o.weightMade, champion: o.becameChampion });
     await scheduleReminder(userId);
+  } else if (kind === 'start') {
+    await track(userId, 'fight_started', { tactic });
   }
-  return res;
+  return result;
+}
+
+export async function setTheme(userId: number, theme: ThemeId) {
+  const { result } = await mutate(userId, (f) => {
+    if (!f.state.unlockedThemes.includes(theme)) return { result: { ok: false, error: 'Тема закрыта' } };
+    return { state: { ...f.state, theme }, result: { ok: true, error: '' } };
+  });
+  return result ?? { ok: false, error: 'Нет бойца' };
 }
