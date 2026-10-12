@@ -11,8 +11,9 @@ import { Fight } from './screens/fight';
 import { Verdict } from './screens/verdict';
 import { Shop } from './screens/shop';
 import { History } from './screens/history';
+import { Arena } from './screens/arena';
 
-export type Screen = 'gym' | 'tape' | 'fight' | 'verdict' | 'shop' | 'history';
+export type Screen = 'gym' | 'tape' | 'fight' | 'verdict' | 'shop' | 'history' | 'arena';
 export type Go = (s: Screen) => void;
 
 const CHROME: Record<string, string> = { basement: '#101211', mountain: '#f3ead7', arena: '#07060b' };
@@ -24,6 +25,7 @@ export function App() {
   const [screen, setScreen] = useState<Screen>('gym');
   const [first, setFirst] = useState<StepResp | null>(null);
   const [outcome, setOutcome] = useState<FightOutcome | null>(null);
+  const [focusId, setFocusId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ m: string; bad: boolean } | null>(null);
 
   const flash = (m: string, bad = false) => {
@@ -46,8 +48,17 @@ export function App() {
         }
         const r = await api.session(wa);
         setF(r.fighter);
+        // Вызов друга / реванш: по start_param сервер уже положил соперника на арену.
+        // Фолбэк для web_app-кнопки бота: ?rv=<id> в адресе.
+        let chId = r.challenge?.id ?? null;
+        const q = new URLSearchParams(location.search).get('rv') ?? new URLSearchParams(location.search).get('ch');
+        if (!chId && q && r.fighter && !api.demo) {
+          const c = await api.challenge(Number(q));
+          if (c.card) chId = c.card.id;
+        }
         // незаконченный бой — сразу в клетку
         if (r.fighter?.state.activeFight) setScreen('fight');
+        else if (chId && r.fighter) (setFocusId(chId), setScreen('arena'));
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -78,7 +89,10 @@ export function App() {
       setF=${setF}
       onDone=${(o: FightOutcome) => (setOutcome(o), setFirst(null), setScreen('verdict'))}
     />`;
-  else if (screen === 'verdict' && outcome) body = html`<${Verdict} f=${f} o=${outcome} onClose=${() => (setOutcome(null), refresh(), setScreen('gym'))} />`;
+  else if (screen === 'verdict' && outcome)
+    body = html`<${Verdict} f=${f} o=${outcome} onClose=${() => (setOutcome(null), refresh(), setScreen('gym'))} onArena=${() => (setOutcome(null), refresh(), setScreen('arena'))} />`;
+  else if (screen === 'arena')
+    body = html`<${Arena} f=${f} setF=${setF} go=${go} flash=${flash} focusId=${focusId} onFight=${(r: StepResp) => (r.fighter && setF(r.fighter), setFirst(r), setFocusId(null), setScreen('fight'))} />`;
   else if (screen === 'shop') body = html`<${Shop} f=${f} setF=${setF} go=${go} flash=${flash} refresh=${refresh} />`;
   else if (screen === 'history') body = html`<${History} f=${f} go=${go} />`;
   else body = html`<${Gym} f=${f} setF=${setF} go=${go} flash=${flash} />`;

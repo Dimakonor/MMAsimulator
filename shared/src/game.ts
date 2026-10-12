@@ -1,5 +1,7 @@
 import { BALANCE as B, type ThemeId } from './config.js';
 import type { ActiveFight, HistoryEntry } from './fight.js';
+import type { PvpCard, PvpHistoryEntry } from './pvp.js';
+import type { Tactic } from './opponents.js';
 
 export interface Skills {
   striking: number;
@@ -41,6 +43,16 @@ export interface FighterState {
   createdAt: number;
   theme: ThemeId;
   unlockedThemes: ThemeId[];
+  // ---- Арена (PvP) ----
+  elo: number;
+  pvp: { w: number; l: number };
+  pvpPlan: Tactic[]; // как боец дерётся, когда вызывают его (3 раунда)
+  pvpDay: number; // номер дня для лимита боёв
+  pvpToday: number;
+  pvpHistory: PvpHistoryEntry[];
+  pvpUnseen: number; // вызовы, пока игрока не было
+  arenaOffers: PvpCard[];
+  arenaOffersAt: number;
 }
 
 export type TrainKind = 'striking' | 'grappling' | 'cardio';
@@ -80,14 +92,35 @@ export function newFighter(now: number, theme: ThemeId = 'basement'): FighterSta
     createdAt: now,
     theme,
     unlockedThemes: [theme],
+    ...PVP_DEFAULTS(),
   };
+}
+
+const PVP_DEFAULTS = () => ({
+  elo: 1000,
+  pvp: { w: 0, l: 0 },
+  pvpPlan: ['pressure', 'counter', 'takedown'] as Tactic[],
+  pvpDay: 0,
+  pvpToday: 0,
+  pvpHistory: [] as PvpHistoryEntry[],
+  pvpUnseen: 0,
+  arenaOffers: [] as PvpCard[],
+  arenaOffersAt: 0,
+});
+
+/** Старые сохранения без полей арены — дополняем. */
+export function normalize(s: FighterState): FighterState {
+  const d = PVP_DEFAULTS() as Record<string, unknown>;
+  const o = s as unknown as Record<string, unknown>;
+  for (const k of Object.keys(d)) if (o[k] === undefined) o[k] = d[k];
+  return s;
 }
 
 export const totalSkill = (s: Skills) => s.striking + s.grappling + s.cardio;
 
 /** Досчитывает состояние от lastTickAt до now. Время — только серверное. */
 export function advance(s0: FighterState, now: number): FighterState {
-  const s: FighterState = JSON.parse(JSON.stringify(s0)); // structuredClone нет в старых WebView
+  const s: FighterState = normalize(JSON.parse(JSON.stringify(s0))); // structuredClone нет в старых WebView
   if (now <= s.lastTickAt) return s;
 
   let t = Math.max(s.lastTickAt, now - B.simMaxSpan);

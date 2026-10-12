@@ -4,6 +4,7 @@ import {
   PRODUCTS,
   THEME_IDS,
   cornerAdvice,
+  pvpLeft,
   rating,
   taleOfTheTape,
   type ActionType,
@@ -17,6 +18,7 @@ import { createFighter, doAction, doFightStep, setTheme, viewFighter } from './f
 import { bot } from './bot.js';
 import { createInvoiceLink, isProduct } from './payments.js';
 import { scheduleReminder } from './reminders.js';
+import { addChallenge, arenaView, pvpStep, savePlan } from './arena.js';
 
 type Vars = { Variables: { tg: InitData } };
 export const api = new Hono<Vars>();
@@ -46,6 +48,8 @@ function publicState(f: NonNullable<Awaited<ReturnType<typeof viewFighter>>>) {
     rating: rating(s),
     tape: taleOfTheTape(s),
     corner: s.activeFight ? cornerAdvice(s.activeFight) : null,
+    pvpLeft: pvpLeft(s, Date.now()),
+    myId: f.id,
     serverNow: Date.now(),
   };
 }
@@ -65,7 +69,15 @@ api.post('/session', async (c) => {
   await track(user.id, row?.inserted ? 'first_open' : 'app_open', { source: startParam });
   const f = await viewFighter(user.id);
   if (f) await scheduleReminder(user.id);
-  return c.json({ fighter: f ? publicState(f) : null, products: PRODUCTS });
+  // Вызов друга (ch_<id>) или реванш (rv_<id>) — сразу кладём соперника на арену
+  const m = /^(ch|rv)_(\d+)$/.exec(startParam ?? '');
+  let challenge = null;
+  if (f && m) {
+    const r = await addChallenge(user.id, Number(m[2]));
+    if ('card' in r) challenge = r.card;
+  }
+  const fresh = challenge ? await viewFighter(user.id) : f;
+  return c.json({ fighter: fresh ? publicState(fresh) : null, products: PRODUCTS, challenge });
 });
 
 api.post('/fighter', async (c) => {
@@ -125,4 +137,40 @@ api.post('/event', async (c) => {
   if (!/^[a-z_]{2,40}$/.test(name)) return c.json({ error: 'bad event' }, 400);
   await track(user.id, `c_${name}`, props ?? {});
   return c.json({ ok: true });
+});
+
+// ---------- Арена ----------
+api.post('/arena', async (c) => {
+  const { user } = c.get('tg');
+  const { refresh } = await c.req.json<{ refresh?: boolean }>().catch(() => ({}) as { refresh?: boolean });
+  const a = await arenaView(user.id, !!refresh);
+  if (!a) return c.json({ error: 'Нет бойца' }, 400);
+  const f = await viewFighter(user.id);
+  return c.json({ ...a, fighter: f && publicState(f) });
+});
+
+api.post('/arena/plan', async (c) => {
+  const { user } = c.get('tg');
+  const { plan } = await c.req.json<{ plan: Tactic[] }>();
+  const r = await savePlan(user.id, plan);
+  const f = await viewFighter(user.id);
+  return c.json({ ok: 'ok' in r, message: 'error' in r ? r.error : 'План защиты сохранён', fighter: f && publicState(f) });
+});
+
+api.post('/arena/challenge', async (c) => {
+  const { user } = c.get('tg');
+  const { fighterId } = await c.req.json<{ fighterId: number }>();
+  const r = await addChallenge(user.id, Number(fighterId));
+  return c.json(r);
+});
+
+api.post('/pvp/:kind{start|next}', async (c) => {
+  const { user } = c.get('tg');
+  const kind = c.req.param('kind') as 'start' | 'next';
+  const { tactic, oppId } = await c.req.json<{ tactic: Tactic; oppId?: number }>();
+  if (!TACTICS.includes(tactic)) return c.json({ error: 'bad tactic' }, 400);
+  const r = await pvpStep(user.id, kind, tactic, oppId);
+  const f = await viewFighter(user.id);
+  if ('error' in r) return c.json({ ok: false, message: r.error, fighter: f && publicState(f) });
+  return c.json({ ok: true, round: r.round, outcome: r.outcome, fighter: f && publicState(f) });
 });

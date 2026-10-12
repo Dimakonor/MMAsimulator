@@ -19,6 +19,7 @@ export function Fight({ f, first, onDone, setF }: { f: PublicFighter; first: Ste
   const [pick, setPick] = useState<Tactic | null>(null);
   const [flashKo, setFlashKo] = useState(false);
   const opp = outcome?.opp ?? af?.opp ?? f.tape.opp;
+  const pvpMode = !!opp.pvp;
   const theme = f.state.theme;
 
   const cur = rounds[rounds.length - 1];
@@ -43,7 +44,7 @@ export function Fight({ f, first, onDone, setF }: { f: PublicFighter; first: Ste
   const next = async () => {
     if (!pick) return;
     setBusy(true);
-    const r = await api.fight('next', pick);
+    const r = pvpMode ? await api.pvp('next', pick) : await api.fight('next', pick);
     setBusy(false);
     if (r.fighter) setF(r.fighter);
     if (!r.ok || !r.round) return;
@@ -70,7 +71,7 @@ export function Fight({ f, first, onDone, setF }: { f: PublicFighter; first: Ste
         })}</div>
         <small>${pWon}:${oWon}</small>
       </div>
-      <div class="sb-side r"><img src=${art(theme, `o${opp.art}`)} alt="" /><b>${opp.nick}</b></div>
+      <div class="sb-side r"><img src=${art(theme, opp.portrait ?? `o${opp.art}`)} alt="" /><b>${opp.nick}</b></div>
     </header>
 
     <div class="stamina">

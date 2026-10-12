@@ -117,6 +117,11 @@ export function Gym({ f, setF, go, flash }: { f: PublicFighter; setF: (f: Public
       </div>
     </section>
 
+    <button class="panel arena-cta" onClick=${() => go('arena')}>
+      <div><b>⚔️ Арена</b><span>Бои с бойцами других игроков · рейтинг ${s.elo}</span></div>
+      <div class="arena-cta-r">${s.pvpUnseen > 0 ? html`<em class="badge">${s.pvpUnseen}</em>` : ''}<small>${f.pvpLeft}/3 сегодня</small></div>
+    </button>
+
     ${s.freezes > 0 &&
     !frozen &&
     html`<button class="btn ghost wide" onClick=${() => act('freeze')}>🩹 Включить больничный (есть: ${s.freezes})</button>`}

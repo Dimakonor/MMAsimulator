@@ -13,8 +13,16 @@ import {
   newFighter,
   nextOpponent,
   startFight,
+  PVP,
+  applyDefense,
+  canPvp,
+  makeGhost,
+  pvpCard,
+  refreshOffers,
+  startPvp,
   type FighterState,
   type FightStep,
+  type PvpCard,
   type Tactic,
 } from '../src/index.js';
 
@@ -178,5 +186,52 @@ describe('бой', () => {
       }
     }
     throw new Error('ни разу не победил');
+  });
+});
+
+describe('арена (PvP)', () => {
+  const now = T0 + 2 * HOUR;
+  const play = (s: FighterState, card: PvpCard, pick: Tactic) => {
+    let st = startPvp(s, 'Я', 1, card, pick, now);
+    if ('error' in st) throw new Error(st.error);
+    while (!st.outcome) {
+      const n = continueFight(st.state, 'Я', pick, now);
+      if ('error' in n) throw new Error(n.error);
+      st = n;
+    }
+    return st;
+  };
+
+  it('бой против живого игрока: ELO и рекорды зеркальны', () => {
+    const me = newFighter(T0);
+    const foe = { ...newFighter(T0), skills: { striking: 5, grappling: 5, cardio: 5 } };
+    const card = pvpCard(foe, 2, 'Соперник', 1, now);
+    const r = play(me, card, 'pressure');
+    const o = r.outcome!;
+    expect(o.pvp!.oppId).toBe(2);
+    expect(r.state.pvp.w + r.state.pvp.l).toBe(1);
+    expect(r.state.record.w + r.state.record.l).toBe(0); // карьера не тронута
+    const def = applyDefense(foe, 'Я', 1, 0, o, now);
+    expect(def.elo - 1000).toBe(-(r.state.elo - 1000));
+    expect(def.pvpUnseen).toBe(1);
+  });
+
+  it('соперник дерётся строго по своему плану защиты', () => {
+    const foe = { ...newFighter(T0), pvpPlan: ['takedown', 'takedown', 'takedown'] as Tactic[] };
+    const r = play(newFighter(T0), pvpCard(foe, 2, 'Борец', 0, now), 'counter');
+    for (const rd of r.outcome!.rounds) expect(rd.oTactic).toBe('takedown');
+  });
+
+  it('лимит боёв в день', () => {
+    let s = newFighter(T0);
+    for (let i = 0; i < PVP.perDay; i++) s = play({ ...s, energy: 100 }, makeGhost(s, 10 + i), 'pressure').state;
+    expect(canPvp({ ...s, energy: 100 }, now).ok).toBe(false);
+    expect(canPvp({ ...s, energy: 100 }, now + DAY).ok).toBe(true);
+  });
+
+  it('соперники обновляются ботами до трёх', () => {
+    const s = refreshOffers(newFighter(T0), [], now, 5);
+    expect(s.arenaOffers.length).toBe(PVP.offersCount);
+    expect(s.arenaOffers.every((c) => c.ghost)).toBe(true);
   });
 });

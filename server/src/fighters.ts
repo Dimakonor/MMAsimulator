@@ -33,7 +33,7 @@ export async function getFighter(userId: number, tx: Tx = sql, lock = false): Pr
 }
 
 async function save(tx: Tx, f: FighterRow, state: FighterState) {
-  await tx`update fighters set state = ${tx.json(state as never)}, updated_at = now() where id = ${f.id}`;
+  await tx`update fighters set state = ${tx.json(state as never)}, elo = ${state.elo ?? 1000}, updated_at = now() where id = ${f.id}`;
 }
 
 export async function createFighter(userId: number, name: string, look: number, theme: ThemeId) {
@@ -80,6 +80,7 @@ export async function doAction(userId: number, action: ActionType, via: 'app' | 
 
 export async function doFightStep(userId: number, tactic: Tactic, kind: 'start' | 'next') {
   const { result, fighter } = await mutate(userId, (f, now) => {
+    if (kind === 'next' && f.state.activeFight?.mode === 'pvp') return { result: { error: 'Идёт бой на арене.' } as { error: string } | FightStep };
     const r = kind === 'start' ? startFight(f.state, f.name, f.id, tactic, now) : continueFight(f.state, f.name, tactic, now);
     if ('error' in r) return { result: { error: r.error } as { error: string } | FightStep };
     return { state: r.state, result: r as { error: string } | FightStep };

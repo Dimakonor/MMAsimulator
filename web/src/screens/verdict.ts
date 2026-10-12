@@ -1,9 +1,9 @@
 import type { FightOutcome } from '@mma/shared';
-import type { PublicFighter } from '../api';
+import { api, type PublicFighter } from '../api';
 import { DECISION_TITLE, METHOD_TITLE, art, html } from '../ui';
 import { share } from '../telegram';
 
-export function Verdict({ f, o, onClose }: { f: PublicFighter; o: FightOutcome; onClose: () => void }) {
+export function Verdict({ f, o, onClose, onArena }: { f: PublicFighter; o: FightOutcome; onClose: () => void; onArena: () => void }) {
   const theme = f.state.theme;
   const sum = (k: 'strikes' | 'td' | 'kd', i: 0 | 1) => o.rounds.reduce((a, r) => a + r.stats[k][i], 0);
   const methodLine =
@@ -11,7 +11,12 @@ export function Verdict({ f, o, onClose }: { f: PublicFighter; o: FightOutcome; 
       ? `${o.won ? 'Победа' : 'Поражение'} ${DECISION_TITLE[o.decision ?? 'UD']?.toLowerCase()}`
       : `${METHOD_TITLE[o.method]} · раунд ${o.round}, ${o.time}`;
   const how = o.method === 'DEC' ? 'решение судей' : `${METHOD_TITLE[o.method].toLowerCase()}, ${o.round}-й раунд`;
-  const shareText = o.won
+  const pv = o.pvp;
+  const shareText = pv
+    ? o.won
+      ? `⚔️ Положил «${o.opp.name}» на арене MMA Simulator (${how}). Рейтинг ${pv.elo}. Выходи против меня:`
+      : `⚔️ «${o.opp.name}» оказался сильнее (${how}). Готовлю реванш. Выходи против меня:`
+    : o.won
     ? `🥊 ${f.name} vs «${o.opp.nick}»: ПОБЕДА (${how}). Рекорд ${o.record.w}-${o.record.l}.${o.becameChampion ? ' 🏆 НОВЫЙ ЧЕМПИОН!' : ''} Вырасти своего бойца:`
     : `🥊 ${f.name} vs «${o.opp.nick}»: поражение (${how}). Реванш будет. Вырасти своего бойца:`;
 
@@ -20,7 +25,7 @@ export function Verdict({ f, o, onClose }: { f: PublicFighter; o: FightOutcome; 
     html`<div class="confetti">${Array.from({ length: 36 }, (_, i) => html`<i style=${{ left: `${(i * 2.8) % 100}%`, animationDelay: `${(i % 9) * 0.18}s` }}></i>`)}</div>`}
 
     <div class=${`verdict-banner ${o.won ? 'win' : 'loss'}`}>
-      <div class="kicker">${o.won ? 'Рефери поднимает руку' : 'Сегодня не твой день'}</div>
+      <div class="kicker">${pv ? `Арена · ${o.opp.name}` : o.won ? 'Рефери поднимает руку' : 'Сегодня не твой день'}</div>
       <h1>${o.won ? 'ПОБЕДА' : 'ПОРАЖЕНИЕ'}</h1>
       <div class="method">${methodLine}</div>
     </div>
@@ -45,11 +50,15 @@ export function Verdict({ f, o, onClose }: { f: PublicFighter; o: FightOutcome; 
       <div class=${o.weightMade ? 'good' : 'bad'}>${o.weightMade ? '✅ Вес был сделан' : '❌ Промах с весом'}</div>
     </section>
 
-    <div class="record big"><b>${o.record.w}-${o.record.l}</b><span>${o.record.ko} KO · ${o.record.sub} SUB · ${o.record.dec} DEC</span></div>
+    ${pv
+      ? html`<div class="elo-change ${pv.eloDelta >= 0 ? 'up' : 'down'}"><span>Рейтинг арены</span><b>${pv.elo}</b><em>${pv.eloDelta >= 0 ? '+' : ''}${pv.eloDelta}</em><small>Арена: ${pv.record.w}-${pv.record.l}</small></div>`
+      : html`<div class="record big"><b>${o.record.w}-${o.record.l}</b><span>${o.record.ko} KO · ${o.record.sub} SUB · ${o.record.dec} DEC</span></div>`}
 
     <div class="row">
-      <button class="btn ghost grow" onClick=${() => share(shareText)}>Поделиться</button>
-      <button class="btn primary grow" onClick=${onClose}>В зал</button>
+      <button class="btn ghost grow" onClick=${() => share(shareText, pv ? api.inviteLink(f.myId) : undefined)}>Поделиться</button>
+      ${pv
+        ? html`<button class="btn primary grow" onClick=${onArena}>${o.won ? 'Ещё бой' : 'На арену'}</button>`
+        : html`<button class="btn primary grow" onClick=${onClose}>В зал</button>`}
     </div>
   </div>`;
 }

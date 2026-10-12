@@ -1,4 +1,4 @@
-import type { FighterState, FightOutcome, ProductId, RoundResult, Tactic, ThemeId, taleOfTheTape } from '@mma/shared';
+import type { FighterState, FightOutcome, ProductId, PvpCard, RoundResult, Tactic, ThemeId, taleOfTheTape } from '@mma/shared';
 import { PRODUCTS } from '@mma/shared';
 import { openInvoice, tg } from './telegram';
 import { demoApi } from './demo';
@@ -10,7 +10,18 @@ export interface PublicFighter {
   rating: number;
   tape: ReturnType<typeof taleOfTheTape>;
   corner: string | null;
+  pvpLeft: number;
+  myId: number;
   serverNow: number;
+}
+
+export interface ArenaResp {
+  offers: PvpCard[];
+  newDefenses: number;
+  place: number;
+  myId: number;
+  leaderboard: { id: number; name: string; look: number; elo: number; w: number; l: number; ghost?: boolean }[];
+  fighter: PublicFighter | null;
 }
 
 export interface ActionResp {
@@ -31,7 +42,13 @@ export type Products = typeof PRODUCTS;
 
 export interface Api {
   demo: boolean;
-  session(writeAccess: boolean): Promise<{ fighter: PublicFighter | null; products: Products }>;
+  session(writeAccess: boolean): Promise<{ fighter: PublicFighter | null; products: Products; challenge?: PvpCard | null }>;
+  arena(refresh?: boolean): Promise<ArenaResp>;
+  plan(plan: Tactic[]): Promise<ActionResp>;
+  challenge(fighterId: number): Promise<{ ok?: boolean; error?: string; card?: PvpCard }>;
+  pvp(kind: 'start' | 'next', tactic: Tactic, oppId?: number): Promise<StepResp>;
+  /** Ссылка «вызови меня» для друга */
+  inviteLink(myId: number): string;
   create(name: string, look: number, theme: ThemeId): Promise<{ fighter: PublicFighter | null; error?: string }>;
   action(action: string): Promise<ActionResp>;
   fight(kind: 'start' | 'next', tactic: Tactic): Promise<StepResp>;
@@ -42,6 +59,9 @@ export interface Api {
   travel?(ms: number): Promise<PublicFighter | null>;
   reset?(): void;
 }
+
+// Задаётся при сборке: VITE_APP_LINK=https://t.me/<bot>/<app>
+const APP_LINK: string = (import.meta as { env?: Record<string, string> }).env?.VITE_APP_LINK ?? 'https://t.me/';
 
 async function call<T>(path: string, body: unknown = {}): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -61,6 +81,11 @@ const httpApi: Api = {
   action: (action) => call('/action', { action }),
   fight: (kind, tactic) => call(`/fight/${kind}`, { tactic }),
   theme: (theme) => call('/theme', { theme }),
+  arena: (refresh) => call('/arena', { refresh }),
+  plan: (plan) => call('/arena/plan', { plan }),
+  challenge: (fighterId) => call('/arena/challenge', { fighterId }),
+  pvp: (kind, tactic, oppId) => call(`/pvp/${kind}`, { tactic, oppId }),
+  inviteLink: (id) => `${APP_LINK}?startapp=ch_${id}`,
   async buy(product) {
     const { link } = await call<{ link: string }>('/invoice', { product });
     return openInvoice(link);

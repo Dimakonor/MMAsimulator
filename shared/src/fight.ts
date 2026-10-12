@@ -41,6 +41,8 @@ export interface FightOpp {
   art: number;
   quote: string;
   defense: boolean;
+  portrait?: string; // имя картинки: 'f1' (боец игрока) или 'o3'; по умолчанию o{art}
+  pvp?: { id: number; skills: Skills; cond: number; plan: Tactic[]; elo: number; ghost: boolean };
 }
 
 export interface ActiveFight {
@@ -53,6 +55,7 @@ export interface ActiveFight {
   cond: number; // кондиции игрока, зафиксированные на старте
   skills: Skills; // снимок навыков на старте
   startedAt: number;
+  mode?: 'career' | 'pvp';
 }
 
 export interface FightOutcome {
@@ -68,6 +71,7 @@ export interface FightOutcome {
   becameChampion: boolean;
   defended: boolean;
   record: FighterState['record'];
+  pvp?: { eloDelta: number; elo: number; oppId: number; ghost: boolean; record: { w: number; l: number } };
 }
 
 export interface HistoryEntry {
@@ -185,12 +189,14 @@ function resolveRound(af: ActiveFight, pName: string, pTactic: Tactic): RoundRes
   const n = af.rounds.length + 1;
   const rnd = mulberry32(af.seed * 31 + n * 7919 + TACTIC_LIST.indexOf(pTactic) * 104729);
   const prev = af.rounds.length ? af.rounds[af.rounds.length - 1]! : null;
-  const oTactic = pickTactic(af.opp.style, prev, rnd);
-  const os = oppSkills(af.opp);
+  const pv = af.opp.pvp;
+  // В PvP соперник дерётся по своему плану защиты — его выбрал живой игрок
+  const oTactic = pv ? (pv.plan[n - 1] ?? 'pressure') : pickTactic(af.opp.style, prev, rnd);
+  const os = pv ? pv.skills : oppSkills(af.opp);
 
   const edge: 1 | 0 | -1 = TACTICS[pTactic].beats === oTactic ? 1 : TACTICS[oTactic].beats === pTactic ? -1 : 0;
   let rp = tacticRating(af.skills, pTactic) * stamFactor(af.pStamina) + af.cond;
-  let ro = tacticRating(os, oTactic) * stamFactor(af.oStamina) + oppCond(af.opp.power);
+  let ro = tacticRating(os, oTactic) * stamFactor(af.oStamina) + (pv ? pv.cond : oppCond(af.opp.power));
   if (edge === 1) rp *= 1.3;
   if (edge === -1) ro *= 1.3;
   const diff = round1(rp - ro);
@@ -333,35 +339,9 @@ function step(s: FighterState, pName: string, tactic: Tactic, now: number): Figh
 
 function finalize(s: FighterState, now: number): FightOutcome {
   const af = s.activeFight!;
-  const last = af.rounds[af.rounds.length - 1]!;
-  let won: boolean;
-  let method: Method;
-  let decision: FightOutcome['decision'] = null;
-  let cards: [number, number][] | null = null;
-  let time = '5:00';
-
-  if (last.finish) {
-    won = last.finish.by === 'p';
-    method = last.finish.method;
-    time = last.finish.time;
-  } else {
-    method = 'DEC';
-    cards = scorecards(af.rounds, mulberry32(af.seed ^ 0x9e3779b9));
-    const pj = cards.filter(([p, o]) => p > o).length;
-    const oj = cards.filter(([p, o]) => o > p).length;
-    if (pj === oj) {
-      // ничьих не держим: решает статистика ударов
-      const sp = af.rounds.reduce((a, r) => a + r.stats.strikes[0], 0);
-      const so = af.rounds.reduce((a, r) => a + r.stats.strikes[1], 0);
-      won = sp >= so;
-      decision = 'SD';
-    } else {
-      won = pj > oj;
-      const maj = Math.max(pj, oj);
-      decision = maj === 3 ? 'UD' : pj + oj === 2 ? 'MD' : 'SD';
-    }
-  }
-
+  const res = judge(af);
+  if (af.mode === 'pvp') return finalizePvp(s, af, res, now);
+  const { won, method, decision, cards, time, last } = res;
   const wasChampion = s.rank >= 8;
   s.fightsCount += 1;
   if (won) {
@@ -408,6 +388,48 @@ function finalize(s: FighterState, now: number): FightOutcome {
   };
 }
 
+export interface Judged {
+  won: boolean;
+  method: Method;
+  decision: FightOutcome['decision'];
+  cards: [number, number][] | null;
+  time: string;
+  last: RoundResult;
+}
+
+function judge(af: ActiveFight): Judged {
+  const last = af.rounds[af.rounds.length - 1]!;
+  let won: boolean;
+  let method: Method;
+  let decision: FightOutcome['decision'] = null;
+  let cards: [number, number][] | null = null;
+  let time = '5:00';
+
+  if (last.finish) {
+    won = last.finish.by === 'p';
+    method = last.finish.method;
+    time = last.finish.time;
+  } else {
+    method = 'DEC';
+    cards = scorecards(af.rounds, mulberry32(af.seed ^ 0x9e3779b9));
+    const pj = cards.filter(([p, o]) => p > o).length;
+    const oj = cards.filter(([p, o]) => o > p).length;
+    if (pj === oj) {
+      // ничьих не держим: решает статистика ударов
+      const sp = af.rounds.reduce((a, r) => a + r.stats.strikes[0], 0);
+      const so = af.rounds.reduce((a, r) => a + r.stats.strikes[1], 0);
+      won = sp >= so;
+      decision = 'SD';
+    } else {
+      won = pj > oj;
+      const maj = Math.max(pj, oj);
+      decision = maj === 3 ? 'UD' : pj + oj === 2 ? 'MD' : 'SD';
+    }
+  }
+
+  return { won, method, decision, cards, time, last };
+}
+
 /** Подсказка угла между раундами: что видно по ходу боя. */
 export function cornerAdvice(af: ActiveFight): string {
   const last = af.rounds[af.rounds.length - 1];
@@ -422,4 +444,17 @@ export function cornerAdvice(af: ActiveFight): string {
   if (af.pStamina < 40) lines.push('Ты подсдох — давить сейчас дорого.');
   if (af.oStamina < 35) lines.push('Он сдох! Дави — он не выдержит темп.');
   return lines.join(' ');
+}
+
+// PvP-итог живёт в pvp.ts, чтобы не тянуть цикл импортов
+let finalizePvp: (s: FighterState, af: ActiveFight, r: Judged, now: number) => FightOutcome = () => {
+  throw new Error('pvp not registered');
+};
+export function registerPvpFinalizer(fn: typeof finalizePvp) {
+  finalizePvp = fn;
+}
+
+/** Общий движок раунда — нужен арене. */
+export function stepFight(s: FighterState, pName: string, tactic: Tactic, now: number): FightStep {
+  return step(s, pName, tactic, now);
 }

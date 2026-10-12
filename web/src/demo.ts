@@ -9,6 +9,13 @@ import {
   newFighter,
   rating,
   startFight,
+  startPvp,
+  setPlan,
+  makeGhost,
+  refreshOffers,
+  offersStale,
+  pvpLeft,
+  type PvpCard,
   taleOfTheTape,
   type ActionType,
   type FighterState,
@@ -50,6 +57,8 @@ function pub(): PublicFighter | null {
     rating: rating(s),
     tape: taleOfTheTape(s),
     corner: s.activeFight ? cornerAdvice(s.activeFight) : null,
+    pvpLeft: pvpLeft(s, now()),
+    myId: 1,
     serverNow: now(),
   };
 }
@@ -110,6 +119,41 @@ export const demoApi: Api = {
     return 'paid';
   },
   event: () => {},
+  arena(refresh) {
+    if (!db) return wait({ offers: [], newDefenses: 0, place: 1, myId: 1, leaderboard: [], fighter: null });
+    let s = advance(db.state, now());
+    if (offersStale(s, now()) || refresh) s = refreshOffers(s, [], now(), Math.floor(now() / 1000));
+    db.state = s;
+    persist();
+    // Демо-лидерборд из ботов: как будет выглядеть арена, когда игроки придут
+    const pool: PvpCard[] = Array.from({ length: 24 }, (_, i) => makeGhost({ ...s, elo: 1000 + (12 - i) * 28, skills: { striking: 20 + i, grappling: 18, cardio: 15 } }, 900 + i));
+    const rows = [...pool.map((g) => ({ id: g.id, name: g.name, look: 0, elo: g.elo, w: g.record.w, l: g.record.l, ghost: true })), { id: 1, name: db.name, look: db.look, elo: s.elo, w: s.pvp.w, l: s.pvp.l }]
+      .sort((a, b) => b.elo - a.elo);
+    return wait({ offers: s.arenaOffers, newDefenses: 0, place: rows.findIndex((r) => r.id === 1) + 1, myId: 1, leaderboard: rows, fighter: pub() });
+  },
+  plan(plan) {
+    if (!db) return wait({ ok: false, message: 'Нет бойца', fighter: null });
+    const r = setPlan(advance(db.state, now()), plan);
+    if ('error' in r) return wait({ ok: false, message: r.error, fighter: pub() });
+    db.state = r;
+    persist();
+    return wait({ ok: true, message: 'План защиты сохранён', fighter: pub() });
+  },
+  challenge: () => wait({ error: 'В демо вызовы друзей не работают — только в Telegram.' }),
+  pvp(kind, tactic, oppId) {
+    if (!db) return wait({ ok: false, message: 'Нет бойца', fighter: null });
+    let r;
+    if (kind === 'start') {
+      const card = db.state.arenaOffers.find((c) => c.id === oppId);
+      if (!card) return wait({ ok: false, message: 'Соперник ушёл', fighter: pub() });
+      r = startPvp(db.state, db.name, 1, card, tactic, now());
+    } else r = continueFight(db.state, db.name, tactic, now());
+    if ('error' in r) return wait({ ok: false, message: r.error, fighter: pub() });
+    db.state = r.state;
+    persist();
+    return wait({ ok: true, round: r.round, outcome: r.outcome, fighter: pub() });
+  },
+  inviteLink: () => 'https://t.me/',
   async travel(ms) {
     offset += ms;
     persist();
