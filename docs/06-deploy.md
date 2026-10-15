@@ -5,8 +5,8 @@
 ## Уровень 1. Тестовая версия (без сервера) — GitHub Pages
 Игра целиком в одном `index.html` (ветка `gh-pages`), прогресс хранится в браузере игрока. Подходит, чтобы показать игру друзьям и проверить, как она выглядит в Telegram. **Оплаты Stars, арена с живыми людьми и напоминания бота здесь не работают.**
 
-1. GitHub → репозиторий → **Settings → Pages** → Source: *Deploy from a branch* → Branch: **gh-pages**, папка **/(root)** → Save.
-2. Через 1–2 минуты игра откроется по адресу `https://dimakonor.github.io/MMAsimulator/`.
+1. Уже работает: Pages раздаёт `index.html` из корня ветки `main` → `https://dimakonor.github.io/MMAsimulator/`. (Ветка `gh-pages` содержит то же самое — запасной вариант.)
+2. Если адрес не открывается: Settings → Pages → Source: *Deploy from a branch* → `main`, `/(root)`.
 3. Telegram → **@BotFather** → `/newbot` → получаешь бота и токен (токен никому не показывай).
 4. @BotFather → `/newapp` → выбери бота → название, описание, картинка 640×360 → URL: адрес из шага 2 → короткое имя (например `play`). Получишь ссылку `https://t.me/<бот>/play`: это и есть игра.
 5. Опционально: @BotFather → Bot Settings → Menu Button → тот же URL, чтобы у бота появилась кнопка «Играть».
