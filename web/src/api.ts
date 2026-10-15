@@ -93,5 +93,10 @@ const httpApi: Api = {
   event: (name, props) => void call('/event', { name, props }).catch(() => {}),
 };
 
-/** В Telegram — настоящий сервер. В браузере — демо на той же логике из shared/. */
-export const api: Api = tg ? httpApi : demoApi;
+/**
+ * Автономная сборка (GitHub Pages, tools/build-preview.mjs) ставит window.__STANDALONE__ = true:
+ * тогда даже внутри Telegram игра работает локально, без сервера.
+ * Обычная сборка: в Telegram — настоящий сервер, в браузере — демо на той же логике из shared/.
+ */
+export const STANDALONE = !!(globalThis as { __STANDALONE__?: boolean }).__STANDALONE__;
+export const api: Api = tg && !STANDALONE ? httpApi : demoApi;

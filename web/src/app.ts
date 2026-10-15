@@ -2,7 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { DAY, HOUR, type FightOutcome } from '@mma/shared';
 import { api, type PublicFighter, type StepResp } from './api';
 import { applyTheme, html } from './ui';
-import { requestWriteAccess, setChrome } from './telegram';
+import { requestWriteAccess, setChrome, tg } from './telegram';
 import { store } from './storage';
 import { Create } from './screens/create';
 import { Gym } from './screens/gym';
@@ -15,6 +15,9 @@ import { Arena } from './screens/arena';
 
 export type Screen = 'gym' | 'tape' | 'fight' | 'verdict' | 'shop' | 'history' | 'arena';
 export type Go = (s: Screen) => void;
+
+// Машина времени: в браузере видна всегда, внутри Telegram (автономная сборка) — только с ?demo=1
+const SHOW_DEMOBAR = !tg || new URLSearchParams(location.search).has('demo');
 
 const CHROME: Record<string, string> = { basement: '#101211', mountain: '#f3ead7', arena: '#07060b' };
 
@@ -101,7 +104,7 @@ export function App() {
     <div class="bg" aria-hidden="true"></div>
     ${body}
     ${toast && html`<div class=${`toast ${toast.bad ? 'bad' : ''}`}>${toast.m}</div>`}
-    ${api.demo && html`<${DemoBar} f=${f} setF=${setF} />`}
+    ${api.demo && SHOW_DEMOBAR && html`<${DemoBar} f=${f} setF=${setF} />`}
   </div>`;
 }
 

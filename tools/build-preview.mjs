@@ -56,7 +56,8 @@ process.stdout.write(`<!doctype html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-<title>MMA Simulator — превью</title>
+<title>MMA Simulator</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=Press+Start+2P&family=Rubik+Mono+One&family=Rubik:wght@500;700;900&family=Oswald:wght@500;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
@@ -65,6 +66,7 @@ process.stdout.write(`<!doctype html>
   // Арт встроен в страницу: подменяем пути /art/x.webp на data:-URL
   window.__ART__ = ${JSON.stringify(art)};
   window.__ART_BASE__ = 'art:';
+  window.__STANDALONE__ = true;
   const _set = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src').set;
   Object.defineProperty(HTMLImageElement.prototype, 'src', { set(v) { _set.call(this, typeof v === 'string' && v.startsWith('art:') ? window.__ART__[v.slice(4)] : v); }, get() { return this.getAttribute('src'); } });
   const _sp = CSSStyleDeclaration.prototype.setProperty;
@@ -75,5 +77,6 @@ process.stdout.write(`<!doctype html>
 <body>
 <div id="root"></div>
 <script type="module">import '@web/main';</script>
+<noscript>Нужен JavaScript.</noscript>
 </body>
 </html>`);

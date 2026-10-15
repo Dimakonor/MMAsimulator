@@ -101,7 +101,7 @@ export const demoApi: Api = {
   },
   async buy(product: ProductId) {
     if (!db) return 'failed';
-    const ok = safeConfirm(`ДЕМО: «${PRODUCTS[product].title}» за ⭐${PRODUCTS[product].stars}. В Telegram здесь откроется оплата Stars. Засчитать покупку?`);
+    const ok = safeConfirm(`ТЕСТОВАЯ ВЕРСИЯ (без сервера): «${PRODUCTS[product].title}» за ⭐${PRODUCTS[product].stars}. В Telegram здесь откроется оплата Stars. Засчитать покупку?`);
     if (!ok) return 'cancelled';
     const s = db.state;
     if (product === 'freeze') s.freezes += 1;

@@ -6,12 +6,16 @@
 
 Три темы на выбор, у каждой свой стиль: **Подвал** (пиксель-арт), **Горный лагерь** (комикс), **Неоновая арена** (постер турнира).
 
+**Сыграть (тестовая версия, без сервера):** https://dimakonor.github.io/MMAsimulator/ (после включения Pages, см. docs/06-deploy.md)
+
 ## Документы
 - [`docs/01-concept-review.md`](docs/01-concept-review.md) — жёсткий разбор концепции
 - [`docs/02-mvp-14-days.md`](docs/02-mvp-14-days.md) — скоуп MVP и план по дням
 - [`docs/03-metrics-and-gates.md`](docs/03-metrics-and-gates.md) — метрики, пороги, SQL
 - [`docs/04-tech-notes.md`](docs/04-tech-notes.md) — стек и подводные камни
-- [`docs/05-game-design.md`](docs/05-game-design.md) — механика, соперники, бой, баланс, темы
+- [`docs/05-game-design.md`](docs/05-game-design.md) — механика, соперники, бой, баланс, темы, арена
+- [`docs/06-deploy.md`](docs/06-deploy.md) — **деплой по шагам** (тестовый на GitHub Pages и полный на Railway + Neon)
+- [`AGENTS.md`](AGENTS.md) — правила и долги для следующих разработчиков и ИИ-агентов
 
 ## Структура
 ```
